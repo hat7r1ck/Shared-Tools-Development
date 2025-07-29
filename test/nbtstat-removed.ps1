@@ -3,11 +3,11 @@ param (
     [string]$Target
 )
 
-Clear-Host
+# === VERSION INFO ===
+$scriptVersion = "1.2.0"
+$logPath = "\\SHARE\Scripts\launch_log.txt"
 
-# === HostValidator.ps1 v1.3.0 ===
-# Validates host status using DNS, ICMP, and TCP
-# Logs executions to launch_log.txt in same directory
+Clear-Host
 
 # === INPUT HANDLING ===
 if ([string]::IsNullOrWhiteSpace($Target)) {
@@ -22,6 +22,8 @@ if ([string]::IsNullOrWhiteSpace($Target)) {
 $ip = $null
 $hostname = $null
 $reverseName = "Unavailable"
+$netbiosName = "Unavailable"
+$originalInput = $Target
 
 if ($Target -match '^\d{1,3}(\.\d{1,3}){3}$') {
     $ip = $Target
@@ -30,11 +32,8 @@ if ($Target -match '^\d{1,3}(\.\d{1,3}){3}$') {
 } else {
     $hostname = $Target.Split(".")[0]
     Write-Host "`nUsing cleaned hostname: $hostname" -ForegroundColor Cyan
-
     try {
-        $dnsRecord = Resolve-DnsName -Name $hostname -ErrorAction Stop |
-                     Where-Object { $_.Type -eq "A" } |
-                     Select-Object -First 1
+        $dnsRecord = Resolve-DnsName -Name $hostname -ErrorAction Stop | Where-Object { $_.Type -eq "A" } | Select-Object -First 1
         $ip = $dnsRecord.IPAddress
         Write-Host "Resolved IP: $ip" -ForegroundColor Green
     } catch {
@@ -48,7 +47,6 @@ try {
     $reverseRecord = Resolve-DnsName -Name $ip -Type PTR -ErrorAction Stop
     $reverseName = $reverseRecord.NameHost.TrimEnd(".")
     Write-Host "Reverse DNS: $ip -> $reverseName" -ForegroundColor Yellow
-
     if ($hostname -ne "N/A (IP provided)" -and $reverseName -notlike "*$hostname*") {
         Write-Host "WARNING: Reverse DNS does not match input hostname. DNS may be stale." -ForegroundColor DarkYellow
     }
@@ -71,16 +69,10 @@ $reachable = $false
 $openPort = $null
 
 Write-Host "`nChecking TCP ports..." -ForegroundColor Cyan
-
 foreach ($port in $ports) {
     $check = Test-NetConnection -ComputerName $ip -Port $port -WarningAction SilentlyContinue
     if ($check.TcpTestSucceeded) {
-        $portName = switch ($port) {
-            135 { "RPC" }
-            445 { "SMB" }
-            3389 { "RDP" }
-            default { "Unknown" }
-        }
+        $portName = switch ($port) { 135 { "RPC" } 445 { "SMB" } 3389 { "RDP" } default { "Unknown" } }
         Write-Host "  Port $port ($portName): OPEN" -ForegroundColor Green
         $reachable = $true
         $openPort = $port
@@ -91,21 +83,15 @@ if (-not $reachable) {
     Write-Host "  No common ports are open (135, 445, 3389)" -ForegroundColor Red
 }
 
-# === LOGGING ===
-try {
-    $logPath = Join-Path -Path $PSScriptRoot -ChildPath "launch_log.txt"
-    $logLine = "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')`tUser=$env:USERNAME`tInput=$Target`tResolvedIP=$ip`tStatus=$($reachable ? 'Online' : 'Offline')"
-    Add-Content -Path $logPath -Value $logLine
-} catch {
-    Write-Host "LOGGING FAILED: $($_.Exception.Message)" -ForegroundColor DarkRed
-}
-
 # === FINAL VERDICT ===
 Write-Host "`n========== FINAL VERDICT ==========" -ForegroundColor Cyan
-Write-Host "Timestamp:      $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
-Write-Host "Input:          $Target"
+$timestamp = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
+Write-Host "Timestamp:      $timestamp"
+Write-Host "Version:        $scriptVersion"
+Write-Host "Input:          $originalInput"
 Write-Host "Resolved IP:    $ip"
 Write-Host "Reverse DNS:    $reverseName"
+Write-Host "NetBIOS Name:   $netbiosName"
 Write-Host "Ping:           " -NoNewline
 if ($pingResult) {
     Write-Host "RESPONDED" -ForegroundColor Green
@@ -116,7 +102,19 @@ Write-Host "Ports Checked:  $($ports -join ', ')"
 
 if ($reachable) {
     Write-Host "RESULT: HOST IS ONLINE (port $openPort confirmed)" -ForegroundColor Green
+    if ($hostname -ne "N/A (IP provided)" -and $netbiosName -ne "Unavailable" -and $hostname.ToLower() -ne $netbiosName.ToLower()) {
+        Write-Host "WARNING: Hostname mismatch - DNS says '$hostname', machine says '$netbiosName'" -BackgroundColor DarkRed -ForegroundColor White
+    }
 } else {
     Write-Host "RESULT: HOST IS OFFLINE OR BLOCKED (no TCP connection)" -ForegroundColor Red
 }
 Write-Host "===================================" -ForegroundColor Cyan
+
+# === LOGGING ===
+$logEntry = "$timestamp | $scriptVersion | $originalInput | IP: $ip | Ping: $($pingResult) | Port: $openPort | DNS: $reverseName | NetBIOS: $netbiosName"
+
+try {
+    Add-Content -Path $logPath -Value $logEntry
+} catch {
+    Write-Host "Failed to write to log file at $logPath" -ForegroundColor DarkRed
+}
