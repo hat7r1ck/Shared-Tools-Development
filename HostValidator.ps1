@@ -3,6 +3,11 @@ param (
     [string]$Target
 )
 
+# === SCRIPT METADATA ===
+$ScriptName = "HostValidator.ps1"
+$ScriptVersion = "1.0.0"
+$LogPath = "\\SHARE\Scripts\host_validator_log.txt"
+
 Clear-Host
 
 # === INPUT HANDLING ===
@@ -30,8 +35,14 @@ if ($Target -match '^\d{1,3}(\.\d{1,3}){3}$') {
     Write-Host "`nUsing cleaned hostname: $hostname" -ForegroundColor Cyan
 
     try {
-        $dnsRecord = Resolve-DnsName -Name $hostname -ErrorAction Stop | Where-Object { $_.Type -eq "A" } | Select-Object -First 1
+        $dnsRecord = Resolve-DnsName -Name $hostname -ErrorAction Stop |
+                     Where-Object { $_.Type -eq "A" } |
+                     Select-Object -First 1
         $ip = $dnsRecord.IPAddress
+        if (-not $ip) {
+            Write-Host "ERROR: DNS resolution returned no IP. Exiting." -ForegroundColor Red
+            exit 1
+        }
         Write-Host "Resolved IP: $ip" -ForegroundColor Green
     } catch {
         Write-Host "ERROR: Unable to resolve IP for '$hostname'. Exiting." -ForegroundColor Red
@@ -39,7 +50,7 @@ if ($Target -match '^\d{1,3}(\.\d{1,3}){3}$') {
     }
 }
 
-# === REVERSE DNS ===
+# === REVERSE DNS LOOKUP ===
 try {
     $reverseRecord = Resolve-DnsName -Name $ip -Type PTR -ErrorAction Stop
     $reverseName = $reverseRecord.NameHost.TrimEnd(".")
@@ -71,7 +82,12 @@ Write-Host "`nChecking TCP ports..." -ForegroundColor Cyan
 foreach ($port in $ports) {
     $check = Test-NetConnection -ComputerName $ip -Port $port -WarningAction SilentlyContinue
     if ($check.TcpTestSucceeded) {
-        $portName = switch ($port) { 135 { "RPC" } 445 { "SMB" } 3389 { "RDP" } default { "Unknown" } }
+        $portName = switch ($port) {
+            135 { "RPC" }
+            445 { "SMB" }
+            3389 { "RDP" }
+            default { "Unknown" }
+        }
         Write-Host "  Port $port ($portName): OPEN" -ForegroundColor Green
         $reachable = $true
         $openPort = $port
@@ -82,12 +98,12 @@ if (-not $reachable) {
     Write-Host "  No common ports are open (135, 445, 3389)" -ForegroundColor Red
 }
 
-# === NETBIOS NAME CHECK (if reachable) ===
+# === NETBIOS NAME CHECK ===
 if ($reachable) {
     Write-Host "`nQuerying NetBIOS name using nbtstat..." -ForegroundColor Cyan
     try {
         $nbtstatOutput = nbtstat -A $ip
-        $match = $nbtstatOutput | Select-String -Pattern '^\s*([^\s]+)\s+<00>\s+UNIQUE'
+        $match = $nbtstatOutput | Select-String -Pattern '^\s*([^\s]+)\s+<..>\s+UNIQUE'
         if ($match) {
             $netbiosName = $match.Matches[0].Groups[1].Value.Trim()
             Write-Host "NetBIOS Name: $netbiosName" -ForegroundColor Green
@@ -100,6 +116,7 @@ if ($reachable) {
 }
 
 # === FINAL VERDICT ===
+Write-Host "`n[$ScriptName v$ScriptVersion]" -ForegroundColor DarkGray
 Write-Host "`n========== FINAL VERDICT ==========" -ForegroundColor Cyan
 Write-Host "Timestamp:      $(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')"
 Write-Host "Input:          $Target"
@@ -119,7 +136,21 @@ if ($reachable) {
     if ($hostname -ne "N/A (IP provided)" -and $netbiosName -ne "Unavailable" -and $hostname.ToLower() -ne $netbiosName.ToLower()) {
         Write-Host "WARNING: Hostname mismatch — DNS says '$hostname', machine says '$netbiosName'" -BackgroundColor DarkRed -ForegroundColor White
     }
+    $exitCode = 0
 } else {
     Write-Host "RESULT: HOST IS OFFLINE OR BLOCKED (no TCP connection)" -ForegroundColor Red
+    $exitCode = 2
 }
 Write-Host "===================================" -ForegroundColor Cyan
+
+# === LOG EXECUTION ===
+try {
+    $username = $env:USERNAME
+    $timestamp = Get-Date -Format "yyyy-MM-dd HH:mm:ss"
+    $logEntry = "$timestamp | $username ran $ScriptName v$ScriptVersion with input='$Target' resolved_ip='$ip'"
+    Add-Content -Path $LogPath -Value $logEntry
+} catch {
+    Write-Host "Failed to write to log: $LogPath" -ForegroundColor Yellow
+}
+
+exit $exitCode
