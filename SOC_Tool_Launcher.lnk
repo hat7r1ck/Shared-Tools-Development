@@ -1,0 +1,38 @@
+# SOC_Tool_Launcher.lnk (Shortcut Setup)
+
+This optional shortcut allows analysts to launch the shared SOC tools menu with a double-click, without needing to open PowerShell manually.
+
+---
+
+### How to Manually Create the Shortcut
+
+1. Right-click on the Desktop or inside a folder and choose **New > Shortcut**  
+2. In the **Type the location of the item** field, enter:
+
+       powershell.exe -NoExit -ExecutionPolicy Bypass -File "\\SHARE\Scripts\LaunchFromShare.ps1"
+
+3. Click **Next**, then name the shortcut:
+
+       SOC Tool Launcher
+
+4. Click **Finish**  
+5. Right-click the new shortcut and select **Properties**  
+6. In the **Start in** field, enter:
+
+       \\SHARE\Scripts
+
+7. (Optional) Click **Change Icon** and choose something visually distinct
+
+---
+
+### Final Shortcut Configuration (for reference or scripting)
+
+**Target:**
+
+    powershell.exe -NoExit -ExecutionPolicy Bypass -File "\\SHARE\Scripts\LaunchFromShare.ps1"
+
+**Start in:**
+
+    \\SHARE\Scripts
+
+No elevation or admin rights are required. The only requirement is read access to the share.
