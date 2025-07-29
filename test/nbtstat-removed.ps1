@@ -6,8 +6,8 @@ param (
 Clear-Host
 
 # === HostValidator.ps1 v1.3.0 ===
-# Validates host status via DNS, ICMP, and TCP. Logs results locally.
-# Maintainer: SOC Automation Team
+# Validates host status using DNS, ICMP, and TCP
+# Logs executions to launch_log.txt in same directory
 
 # === INPUT HANDLING ===
 if ([string]::IsNullOrWhiteSpace($Target)) {
@@ -94,10 +94,10 @@ if (-not $reachable) {
 # === LOGGING ===
 try {
     $logPath = Join-Path -Path $PSScriptRoot -ChildPath "launch_log.txt"
-    $logEntry = "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')`tUser=$env:USERNAME`tInput=$Target`tIP=$ip`tStatus=$($reachable ? 'Online' : 'Offline')"
-    Add-Content -Path $logPath -Value $logEntry
+    $logLine = "$(Get-Date -Format 'yyyy-MM-dd HH:mm:ss')`tUser=$env:USERNAME`tInput=$Target`tResolvedIP=$ip`tStatus=$($reachable ? 'Online' : 'Offline')"
+    Add-Content -Path $logPath -Value $logLine
 } catch {
-    Write-Host "Logging failed: $($_.Exception.Message)" -ForegroundColor DarkRed
+    Write-Host "LOGGING FAILED: $($_.Exception.Message)" -ForegroundColor DarkRed
 }
 
 # === FINAL VERDICT ===
