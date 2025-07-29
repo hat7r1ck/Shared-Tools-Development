@@ -4,8 +4,8 @@ param (
 )
 
 # === VERSION TAG ===
-$ScriptVersion = "v1.3.0"
-$LogPath = "\\SHARE\Scripts\launch_log.txt"  # <-- Update as needed
+$ScriptVersion = "v1.3.1"
+$LogPath = "\\SHARE\Scripts\launch_log.txt"  # <-- Update this UNC path as needed
 
 Clear-Host
 Write-Host "SOC Host Validator - $ScriptVersion`n" -ForegroundColor Cyan
@@ -95,21 +95,21 @@ foreach ($port in $ports) {
 # === FINAL VERDICT ===
 Write-Host "`n========== FINAL VERDICT ==========" -ForegroundColor Cyan
 $timestamp = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
-Write-Host "Timestamp:      $timestamp"
-Write-Host "Input:          $Target"
-Write-Host "Resolved IP:    $ip"
-Write-Host "Reverse DNS:    $reverseName"
-Write-Host "Ping:           " -NoNewline
+Write-Host ("Timestamp:".PadRight(18)     + $timestamp)
+Write-Host ("Input:".PadRight(18)         + $Target)
+Write-Host ("Resolved IP:".PadRight(18)   + $ip)
+Write-Host ("Reverse DNS:".PadRight(18)   + $reverseName)
+Write-Host -NoNewline ("Ping:".PadRight(18))
 if ($pingResult) {
     Write-Host "RESPONDED" -ForegroundColor Green
 } else {
     Write-Host "NO REPLY" -ForegroundColor Yellow
 }
-Write-Host "Ports Checked:  $($ports -join ', ')"
+Write-Host ("Ports Checked:".PadRight(18) + ($ports -join ', '))
 if ($reachable) {
-    Write-Host "RESULT: HOST IS ONLINE (port $openPort confirmed)" -ForegroundColor Green
+    Write-Host ("RESULT:".PadRight(18) + "HOST IS ONLINE (port $openPort confirmed)") -ForegroundColor Green
 } else {
-    Write-Host "RESULT: HOST IS OFFLINE OR BLOCKED (no TCP connection)" -ForegroundColor Red
+    Write-Host ("RESULT:".PadRight(18) + "HOST IS OFFLINE OR BLOCKED (no TCP connection)") -ForegroundColor Red
 }
 Write-Host "===================================" -ForegroundColor Cyan
 
