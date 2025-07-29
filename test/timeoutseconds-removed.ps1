@@ -1,16 +1,14 @@
-# HostValidator.ps1
-# Version 1.0.1
-# Purpose: Validate host availability via DNS, ping, and port checks. Logs results to central share.
-
 param (
     [Parameter(Position = 0)]
     [string]$Target
 )
 
-$scriptVersion = "1.0.1"
-$logPath = "\\SHARE\Scripts\launch_log.txt"
+# === VERSION TAG ===
+$ScriptVersion = "v1.3.0"
+$LogPath = "\\SHARE\Scripts\launch_log.txt"  # <-- Update as needed
 
 Clear-Host
+Write-Host "SOC Host Validator - $ScriptVersion`n" -ForegroundColor Cyan
 
 # === INPUT HANDLING ===
 if ([string]::IsNullOrWhiteSpace($Target)) {
@@ -60,39 +58,44 @@ try {
 
 # === PING TEST ===
 Write-Host "`nRunning ping to $ip..." -ForegroundColor Cyan
-$pingResult = Test-Connection -ComputerName $ip -Count 1 -Quiet -Delay 1
+$pingResult = Test-Connection -ComputerName $ip -Count 2 -Quiet
 if ($pingResult) {
     Write-Host "Ping Result: Host responded to ICMP" -ForegroundColor Green
 } else {
     Write-Host "Ping Result: No ICMP response" -ForegroundColor Yellow
 }
 
-# === TCP PORT CHECK ===
+# === TCP PORT CHECK WITH TIMEOUT WORKAROUND ===
 $ports = @(135, 445, 3389)
 $reachable = $false
 $openPort = $null
 
 Write-Host "`nChecking TCP ports..." -ForegroundColor Cyan
-
 foreach ($port in $ports) {
-    $check = Test-NetConnection -ComputerName $ip -Port $port -WarningAction SilentlyContinue
-    if ($check.TcpTestSucceeded) {
-        $portName = switch ($port) { 135 { "RPC" } 445 { "SMB" } 3389 { "RDP" } default { "Unknown" } }
-        Write-Host "  Port $port ($portName): OPEN" -ForegroundColor Green
-        $reachable = $true
-        $openPort = $port
-        break
+    try {
+        $tcp = New-Object System.Net.Sockets.TcpClient
+        $iar = $tcp.BeginConnect($ip, $port, $null, $null)
+        $success = $iar.AsyncWaitHandle.WaitOne(1500, $false)
+        if ($success -and $tcp.Connected) {
+            $tcp.EndConnect($iar)
+            $tcp.Close()
+            $reachable = $true
+            $openPort = $port
+            Write-Host "  Port $port: OPEN" -ForegroundColor Green
+            break
+        } else {
+            $tcp.Close()
+            Write-Host "  Port $port: CLOSED or BLOCKED" -ForegroundColor Red
+        }
+    } catch {
+        Write-Host "  Port $port: ERROR during check" -ForegroundColor DarkGray
     }
-}
-if (-not $reachable) {
-    Write-Host "  No common ports are open (135, 445, 3389)" -ForegroundColor Red
 }
 
 # === FINAL VERDICT ===
 Write-Host "`n========== FINAL VERDICT ==========" -ForegroundColor Cyan
 $timestamp = Get-Date -Format 'yyyy-MM-dd HH:mm:ss'
 Write-Host "Timestamp:      $timestamp"
-Write-Host "Version:        $scriptVersion"
 Write-Host "Input:          $Target"
 Write-Host "Resolved IP:    $ip"
 Write-Host "Reverse DNS:    $reverseName"
@@ -103,12 +106,8 @@ if ($pingResult) {
     Write-Host "NO REPLY" -ForegroundColor Yellow
 }
 Write-Host "Ports Checked:  $($ports -join ', ')"
-
 if ($reachable) {
     Write-Host "RESULT: HOST IS ONLINE (port $openPort confirmed)" -ForegroundColor Green
-    if ($hostname -ne "N/A (IP provided)" -and $netbiosName -ne "Unavailable" -and $hostname.ToLower() -ne $netbiosName.ToLower()) {
-        Write-Host "WARNING: Hostname mismatch - DNS says '$hostname', machine says '$netbiosName'" -BackgroundColor DarkRed -ForegroundColor White
-    }
 } else {
     Write-Host "RESULT: HOST IS OFFLINE OR BLOCKED (no TCP connection)" -ForegroundColor Red
 }
@@ -116,8 +115,9 @@ Write-Host "===================================" -ForegroundColor Cyan
 
 # === LOGGING ===
 try {
-    $logEntry = "$timestamp | v$scriptVersion | Input: $Target | IP: $ip | Ping: $($pingResult) | Port: $($openPort -ne $null)"
-    Add-Content -Path $logPath -Value $logEntry
+    $user = $env:USERNAME
+    $logLine = "$timestamp`t$user`t$Target`t$ip`t$reverseName`tPing: $pingResult`tTCP: $reachable (Port $openPort)"
+    Add-Content -Path $LogPath -Value $logLine
 } catch {
-    Write-Host "Failed to write to log file at $logPath" -ForegroundColor DarkRed
+    Write-Host "`nWARNING: Could not write to log at $LogPath" -ForegroundColor DarkYellow
 }
