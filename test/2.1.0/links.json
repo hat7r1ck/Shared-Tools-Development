@@ -1,0 +1,38 @@
+{
+  "external_links": {
+    "confluence_soc": {
+      "name": "SOC Confluence Space",
+      "url": "PLACEHOLDER_CONFLUENCE_SOC_URL",
+      "description": "Main SOC procedures and documentation"
+    },
+    "confluence_ir": {
+      "name": "Incident Response Playbooks",
+      "url": "PLACEHOLDER_CONFLUENCE_IR_URL", 
+      "description": "Detailed incident response procedures"
+    },
+    "sharepoint_security": {
+      "name": "Security SharePoint Site",
+      "url": "PLACEHOLDER_SHAREPOINT_SECURITY_URL",
+      "description": "Security team collaboration and documents"
+    },
+    "sharepoint_contacts": {
+      "name": "Emergency Contact List",
+      "url": "PLACEHOLDER_SHAREPOINT_CONTACTS_URL",
+      "description": "After-hours and escalation contact information"
+    },
+    "vulnerability_db": {
+      "name": "Vulnerability Database",
+      "url": "PLACEHOLDER_VULN_DB_URL",
+      "description": "Internal vulnerability tracking system"
+    },
+    "threat_intel": {
+      "name": "Threat Intelligence Portal",
+      "url": "PLACEHOLDER_THREAT_INTEL_URL",
+      "description": "Threat intelligence feeds and analysis"
+    }
+  },
+  "local_docs": {
+    "enabled": true,
+    "scan_extensions": [".md", ".pdf", ".docx", ".txt", ".html"]
+  }
+}
